@@ -1,6 +1,6 @@
 # ESP32-Websocket-BitcoinTicker
 
-Basic live ticker that connects to bitstamp.net websocket server and displays current bitcoin price.
+Basic live ticker that connects to bitstamp.net websocket server and displays current bitcoin price. This project uses the Arduino IDE.
 
 <img src="https://github.com/jfduhart/ESP32-Websocket-BitcoinTicker/blob/master/images/BitcoinTicker.png" width="50%" height="50%" />
 
