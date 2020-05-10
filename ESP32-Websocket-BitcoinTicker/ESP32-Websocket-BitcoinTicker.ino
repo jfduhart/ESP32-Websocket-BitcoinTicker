@@ -177,7 +177,7 @@ void actualizarDisplay()
 const char* websockets_connection_string = "wss://ws.bitstamp.net/"; 
 
 // This certificate was updated 07-05-2020
-const char echo_org_ssl_ca_cert[] PROGMEM = \
+const char bitstamp_ssl_root_ca_cert[] PROGMEM = \
     "-----BEGIN CERTIFICATE-----\n" \
 "MIIElDCCA3ygAwIBAgIQAf2j627KdciIQ4tyS8+8kTANBgkqhkiG9w0BAQsFADBh\n" \
 "MQswCQYDVQQGEwJVUzEVMBMGA1UEChMMRGlnaUNlcnQgSW5jMRkwFwYDVQQLExB3\n" \
@@ -330,7 +330,7 @@ void setup()
     client.onEvent(onEventsCallback);
 
     // Before connecting, set the ssl fingerprint of the server
-    client.setCACert(echo_org_ssl_ca_cert);
+    client.setCACert(bitstamp_ssl_root_ca_cert);
 
     // Connect to server
      connectWS();
