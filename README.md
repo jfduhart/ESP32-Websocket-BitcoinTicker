@@ -4,7 +4,7 @@ Simple live ticker that connects to bitstamp.net websocket server and displays c
 
 Board : TTGO T-Display ESP32
 
-(To set up the board, follow these instructions : [LilyGO TTGO-T-Display](https://github.com/Xinyuan-LilyGO/TTGO-T-Display) )
+(To set up the board, follow these instructions : [LilyGO TTGO T-Display](https://github.com/Xinyuan-LilyGO/TTGO-T-Display) )
 
 ## Libraries used in this project
 
