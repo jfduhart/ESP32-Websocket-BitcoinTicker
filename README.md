@@ -2,11 +2,10 @@
 
 Basic live ticker that connects to bitstamp.net websocket server and displays current bitcoin price.
 
-
-![BitcoinTicker](images/BitcoinTicker.jpeg)
-
+<img src="https://github.com/jfduhart/ESP32-Websocket-BitcoinTicker/blob/master/images/BitcoinTicker.png" width="50%" height="50%" />
 
 Board : TTGO T-Display ESP32
+
 
 (To set up the board, follow these instructions : [LilyGO TTGO T-Display](https://github.com/Xinyuan-LilyGO/TTGO-T-Display) )
 
