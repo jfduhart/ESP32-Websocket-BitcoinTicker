@@ -61,7 +61,7 @@ char horaActual[8] = "";
 //! Long time delay, it is recommended to use shallow sleep, which can effectively reduce the current consumption
 void espDelay(int ms)
 {
-    //this sectino is commented since sleeping the ESP32 breaks the socket connection
+    //this section is commented since sleeping the ESP32 breaks the socket connection
     /*
     esp_sleep_enable_timer_wakeup(ms * 1000);
     esp_sleep_pd_config(ESP_PD_DOMAIN_RTC_PERIPH, ESP_PD_OPTION_ON);
