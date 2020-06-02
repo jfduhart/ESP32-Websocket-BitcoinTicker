@@ -31,7 +31,8 @@ This will show multiple certificates (delimited by "----BEGIN CERTIFICATE----" a
 
 ## Buttons
 
-Code includes handlers for both simple click and long click behaviours, but they are not used for anything at the moment.
+Code includes handlers for both simple click and long click behaviours.
+Simple click now switches between two pages (Dashboard and Info) in infinite loop.
 
 ## Time
 
