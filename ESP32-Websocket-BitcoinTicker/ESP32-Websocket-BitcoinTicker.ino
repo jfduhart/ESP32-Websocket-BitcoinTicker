@@ -30,8 +30,8 @@
 #define TFT_RST             23
 
 #define TFT_BL          4   // Display backlight control pin
-#define ADC_EN          14  //ADC_EN is the ADC detection enable port
-#define ADC_PIN         34
+#define ADC_EN          14  //ADC_EN is the ADC detection enable port ////OUTPUT - ADC Enable pin on TTGO T-Display, automatically high when usb powered, must be set high when on battery
+#define ADC_PIN         34 //INPUT - battery ADC pin on TTGO T-Display
 #define BUTTON_1        35
 #define BUTTON_2        0
 
@@ -47,6 +47,15 @@ const long utcOffsetInSeconds =  -4 * 60 * 60;
 WiFiUDP ntpUDP;
 NTPClient timeClient(ntpUDP, "pool.ntp.org", utcOffsetInSeconds);
 
+int pagina=0;
+const int paginasTotales=2;
+
+float VBAT = 0; // battery voltage from ESP32 ADC read
+float batperc = 0;
+String batPercent = "0%";
+bool charging = false;
+bool lowBatWarning=false;
+
 float precioAnterior=0;
 float precioMenor=0;
 float precioMayor=0;
@@ -54,10 +63,16 @@ float precio=0;
 long lastsync=0;
 String lastSync_str;
 String horaActual_str;
+long lastcheck=0;
+long batterylastcheck=0;
+long epochBoot=0;
 
 char lastsync_dt[19]="" ;
 char horaActual[8] = "";
 
+char bootTimeStamp_str[19]="" ;
+char bootTimeElapsed_str[8]="" ;
+             
 //! Long time delay, it is recommended to use shallow sleep, which can effectively reduce the current consumption
 void espDelay(int ms)
 {
@@ -74,17 +89,31 @@ void espDelay(int ms)
 void button_init()
 {
     btn1.setLongClickHandler([](Button2 & b) {
-        Serial.println("long right click..");
+        //Serial.println("long right click..");
     });
     btn1.setPressedHandler([](Button2 & b) {
-        Serial.println("right click..");   
+        //Serial.println("right click.."); 
+        pagina=pagina+1;
+        if(pagina>paginasTotales-1)
+        {
+          pagina=0;
+        }
+        tft.fillScreen(TFT_BLACK);
+        actualizarDisplay();
     });
 
     btn2.setLongClickHandler([](Button2 & b) {
-        Serial.println("long left click..");
+        //Serial.println("long left click..");
     });
     btn2.setPressedHandler([](Button2 & b) {
-        Serial.println("left click..");
+        //Serial.println("left click..");
+        pagina = pagina-1;
+        if(pagina<0)
+        {
+          pagina = paginasTotales-1;
+        }
+        tft.fillScreen(TFT_BLACK);
+        actualizarDisplay();
     });
 }
 
@@ -94,8 +123,8 @@ void button_loop()
     btn2.loop();
 }
 
-const char* ssid = "your_ssid";
-const char* password = "your_password";
+const char* ssid = "your-ssid";
+const char* password = "your-password";
 
 void wifi_init()
 {
@@ -103,36 +132,66 @@ void wifi_init()
     tft.setCursor(0, 0);
     tft.setTextDatum(MC_DATUM);
     tft.setTextSize(1);
-    tft.drawString("Connecting to the wifi network...",0,tft.height() / 2 - 16);
+    tft.println("Connecting to the wifi network...");
     WiFi.begin(ssid, password);
     int x=0;
     while(WiFi.status() != WL_CONNECTED) {
-        Serial.print(".");
-        tft.drawString(".",0,tft.height() / 2 - 16);
+        //Serial.print(".");
+        tft.print(".");
         espDelay(1000);
         x++;
         if(x>10)
         {
-          Serial.print("Retrying...");
+          //Serial.print("Retrying...");
           WiFi.begin(ssid, password);
-          espDelay(500);
+          espDelay(1000);
           x=0;
         }
     }
-    tft.fillScreen(TFT_BLACK);
-    tft.drawString("Connected!",0,tft.height() / 2 - 16);
+    tft.println("Connected!");
     espDelay(1000);    
-    tft.fillScreen(TFT_BLACK);
 }
 
-void actualizarDisplay()
+void InfoPage()
+{
+  tft.setTextColor(TFT_GREEN, TFT_BLACK);
+  tft.setCursor(0, 0);
+  tft.setTextDatum(MC_DATUM);
+  tft.setTextSize(1);
+
+  sprintf(bootTimeStamp_str, "%02d/%02d/%02d %02d:%02d:%02d", day(epochBoot), month(epochBoot), year(epochBoot), hour(epochBoot), minute(epochBoot), second(epochBoot));
+
+  tft.print("Boot date: ");  
+  tft.println(bootTimeStamp_str);
+
+  int elapsedSecs = millis()/1000;
+  int hours = ((elapsedSecs/60)/60)/60;
+  int minutes = (elapsedSecs/60)-(hours*60) ;
+  int seconds = elapsedSecs - (minutes*60)-(hours*60*60);
+  sprintf(bootTimeElapsed_str, "%02d:%02d:%02d", hours, minutes, seconds);
+  
+  tft.print("Uptime: ");  
+  tft.println(bootTimeElapsed_str);
+
+  tft.print("Voltage: ");
+  tft.println(VBAT/1000);
+}
+
+void DashboardPage()
 {   
     tft.setCursor(0, 0);
     tft.setTextDatum(MC_DATUM);
     tft.setTextColor(TFT_WHITE, TFT_BLACK);
    
     tft.setTextSize(1);
-    tft.drawString(horaActual_str, 220, 0);
+    if(lowBatWarning)
+    {
+      tft.setTextColor(TFT_RED, TFT_BLACK);
+    }
+    tft.drawString(batPercent, 230, 0);
+
+    tft.setTextColor(TFT_WHITE, TFT_BLACK);
+    tft.drawString(horaActual_str, tft.width() / 2, 0);
         
     if(precioAnterior>precio)
     {
@@ -228,49 +287,47 @@ void onMessageCallback(WebsocketsMessage message) {
       
       lastsync = doc["data"]["timestamp"].as<long>()+utcOffsetInSeconds;
 
-      char buff[19]="" ;
       sprintf(lastsync_dt, "%02d/%02d/%02d %02d:%02d:%02d", day(lastsync), month(lastsync), year(lastsync), hour(lastsync), minute(lastsync), second(lastsync));
 
       lastSync_str=String(lastsync_dt);
-      actualizarDisplay();
+      if(pagina==0)
+      {
+        DashboardPage();
+      }
     }
 }
 
 void onEventsCallback(WebsocketsEvent event, String data) {
-   Serial.println("event callback!");
-   Serial.println(data);
+   //Serial.println("event callback!");
+   //Serial.println(data);
     if(event == WebsocketsEvent::ConnectionOpened) {
-        Serial.println("Connnection Opened");
+        //Serial.println("Connnection Opened");
     } else if(event == WebsocketsEvent::ConnectionClosed) {
-        Serial.println("Connnection Closed");     
+        //Serial.println("Connnection Closed");     
     } else if(event == WebsocketsEvent::GotPing) {
-        Serial.println("Got a Ping!");
-        Serial.println("Responding Pong!");
+        //Serial.println("Got a Ping!");
+        //Serial.println("Responding Pong!");
         client.pong();
     } else if(event == WebsocketsEvent::GotPong) {
-        Serial.println("Got a Pong!");
+        //Serial.println("Got a Pong!");
     }
 }
 
 void connectWS()
 {
-   tft.setCursor(0, 0);
-  tft.fillScreen(TFT_BLACK);
     tft.setTextColor(TFT_GREEN);
     tft.setTextDatum(MC_DATUM);
     tft.setTextSize(1);
-    tft.drawString("Opening socket connection...",0,tft.height() / 2 - 16);
+    tft.println("Opening socket connection...");
     
   bool conn = false;
     while(!conn)
     {
       conn = client.connect(websockets_connection_string);
       if(conn) {
-          Serial.println("Connected!");
-          tft.fillScreen(TFT_BLACK);
-          tft.drawString("Socket open, subscribing to channel...",0,tft.height() / 2 - 16);
+          //Serial.println("Connected!");
+          tft.println("Socket open, subscribing to channel...");
           espDelay(1000);
-          tft.fillScreen(TFT_BLACK);
           
           // Send a ping
           client.ping();
@@ -285,13 +342,15 @@ void connectWS()
           serializeJson(doc, ret);
           //Serial.println(ret);
           client.send(ret);
+          tft.println(" subscribed!");
+          tft.println("Loading...");
+          tft.fillScreen(TFT_BLACK);
+          espDelay(2000);
       
       } else {
-          Serial.println("Not Connected!");
-          tft.fillScreen(TFT_BLACK);
-          tft.drawString("Could not open socket, trying again...",0,tft.height() / 2 - 16);
+          //Serial.println("Not Connected!");
+          tft.println("Could not open socket, trying again...");
           espDelay(1000);
-          tft.fillScreen(TFT_BLACK);
       }
       
     }
@@ -305,44 +364,93 @@ void updateTime()
   horaActual_str = String(horaActual); 
 }
 
-void setup()
-{
-    if (TFT_BL > 0) { // TFT_BL has been set in the TFT_eSPI library in the User Setup file TTGO_T_Display.h
-        pinMode(TFT_BL, OUTPUT); // Set backlight pin to output mode
-        digitalWrite(TFT_BL, TFT_BACKLIGHT_ON); // Turn backlight on. TFT_BACKLIGHT_ON has been set in the TFT_eSPI library in the User Setup file TTGO_T_Display.h
-    }
 
-    Serial.begin(115200);
-    Serial.println("Start");
+void updateBatteryStatus()
+{  
+  VBAT = (float)(analogRead(ADC_PIN)) * 3600 / 4095 * 2;
+  batperc = ((VBAT / 1000) - 3)*100;//set 0% to cut power when battery reaches 3v to save li-ion battery from overdischarge
+  batPercent = "100%";
+  if(batperc<100)
+  {
+    batPercent = "  "+String(batperc,0)+"%";
+  }
 
-    tft.init();
-    tft.setRotation(1);
-    tft.fillScreen(TFT_BLACK);
-    
-    wifi_init();  
+  if(batperc<20)
+  {
+    lowBatWarning=true;
+  }
+  else
+  {
+    lowBatWarning=false;
+  }
 
-    button_init();
-
-     // run callback when messages are received
-    client.onMessage(onMessageCallback);
-    
-    // run callback when events are occuring
-    client.onEvent(onEventsCallback);
-
-    // Before connecting, set the ssl fingerprint of the server
-    client.setCACert(bitstamp_ssl_root_ca_cert);
-
-    // Connect to server
-     connectWS();
-
-  
+  if(batperc<1)
+  {
+     //TODO: go to deep sleep mode
+  }
 }
 
-long lastcheck=0;
+void actualizarDisplay()
+{
+  if(pagina==0)
+  {
+    updateTime();
+    DashboardPage();
+    lastcheck=millis();
+  }
+  if(pagina==1)
+  {
+    InfoPage();
+    lastcheck=millis();
+  }
+}
+
+void setup()
+{
+  pinMode(ADC_PIN, INPUT);
+  pinMode(ADC_EN, OUTPUT);
+  digitalWrite(ADC_EN, HIGH);
+
+  if (TFT_BL > 0) { // TFT_BL has been set in the TFT_eSPI library in the User Setup file TTGO_T_Display.h
+      pinMode(TFT_BL, OUTPUT); // Set backlight pin to output mode
+      digitalWrite(TFT_BL, TFT_BACKLIGHT_ON); // Turn backlight on. TFT_BACKLIGHT_ON has been set in the TFT_eSPI library in the User Setup file TTGO_T_Display.h
+  }
+
+  //Serial.begin(115200);
+  //Serial.println("Start");
+
+  tft.init();
+  tft.setRotation(1);
+  tft.fillScreen(TFT_BLACK);
+  
+  wifi_init();  
+
+  button_init();
+
+   // run callback when messages are received
+  client.onMessage(onMessageCallback);
+  
+  // run callback when events are occuring
+  client.onEvent(onEventsCallback);
+
+  // Before connecting, set the ssl fingerprint of the server
+  client.setCACert(bitstamp_ssl_root_ca_cert);
+
+  
+  timeClient.update();
+  epochBoot = timeClient.getEpochTime();
+
+  updateBatteryStatus();
+  batterylastcheck=millis();
+  
+  // Connect to server
+  connectWS();
+
+}
+
+
 void loop()
 {  
-
-    
     button_loop();
     
     if(client.available()) 
@@ -355,12 +463,14 @@ void loop()
     }
     
 
+    if(millis() - batterylastcheck>(1000*60))//updates battery percentage every 60 seconds
+    {
+      updateBatteryStatus();
+      batterylastcheck=millis();
+    }
+    
     if(millis() - lastcheck > 1000) 
     {
-      updateTime();
       actualizarDisplay();
-      lastcheck=millis();
-    }
-
-    
+    }    
 }
