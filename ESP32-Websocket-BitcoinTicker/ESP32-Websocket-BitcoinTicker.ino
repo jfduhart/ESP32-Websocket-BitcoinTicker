@@ -165,7 +165,7 @@ void InfoPage()
   tft.println(bootTimeStamp_str);
 
   int elapsedSecs = millis()/1000;
-  int hours = ((elapsedSecs/60)/60)/60;
+  int hours = (elapsedSecs/60)/60;
   int minutes = (elapsedSecs/60)-(hours*60) ;
   int seconds = elapsedSecs - (minutes*60)-(hours*60*60);
   sprintf(bootTimeElapsed_str, "%02d:%02d:%02d", hours, minutes, seconds);
@@ -368,7 +368,7 @@ void updateTime()
 void updateBatteryStatus()
 {  
   VBAT = (float)(analogRead(ADC_PIN)) * 3600 / 4095 * 2;
-  batperc = ((VBAT / 1000) - 3)*100;//set 0% to cut power when battery reaches 3v to save li-ion battery from overdischarge
+  batperc = (((VBAT / 1000) - 3)*100)/0.8;//set 0% to cut power when battery reaches 3v to save li-ion battery from overdischarge
   batPercent = "100%";
   if(batperc<100)
   {
